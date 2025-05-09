@@ -1,92 +1,46 @@
 import streamlit as st
-import pyaudio
-import numpy as np
-import librosa
 import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader, Dataset
-from sklearn.preprocessing import LabelEncoder
+import sounddevice as sd
+import numpy as np
+from transformers import Wav2Vec2Processor, Wav2Vec2ForCTC
 
-# Constants
-ACCENT_CLASSES = ['English', 'French', 'German', 'Spanish']  # Modify based on your dataset
-SAMPLING_RATE = 16000
-MFCC_FEATURES = 13
-SPEAKER_EMBEDDING_SIZE = 10  # Modify as per your speaker model
-
-# Function to extract MFCC features from audio
-def extract_mfcc(y):
-    mfcc = librosa.feature.mfcc(y=y, sr=SAMPLING_RATE, n_mfcc=MFCC_FEATURES)
-    return np.mean(mfcc.T, axis=0)
-
-# Define the LSTM-based model for accent classification
-class AccentRecognitionModel(nn.Module):
-    def __init__(self, input_size, hidden_size, num_classes):
-        super(AccentRecognitionModel, self).__init__()
-        self.lstm = nn.LSTM(input_size, hidden_size, batch_first=True)
-        self.fc = nn.Linear(hidden_size, num_classes)
-    
-    def forward(self, x):
-        _, (hn, _) = self.lstm(x)
-        x = hn[-1, :, :]
-        x = self.fc(x)
-        return x
-
-# Function to load a pre-trained model (Here we use a dummy model for example purposes)
+# === Load Pretrained Model ===
+@st.cache_resource
 def load_model():
-    model = AccentRecognitionModel(input_size=MFCC_FEATURES, hidden_size=64, num_classes=len(ACCENT_CLASSES))
-    model.eval()  # Set model to evaluation mode
-    return model
+    processor = Wav2Vec2Processor.from_pretrained("facebook/wav2vec2-large-960h")
+    model = Wav2Vec2ForCTC.from_pretrained("facebook/wav2vec2-large-960h")
+    return processor, model
 
-# Dummy speaker embedding function (replace with a real model)
-def dummy_speaker_embedding(y):
-    return np.random.rand(SPEAKER_EMBEDDING_SIZE)
+# === Record Audio ===
+def record_audio(duration=3, fs=16000):
+    st.info(f"Recording for {duration} seconds...")
+    audio = sd.rec(int(duration * fs), samplerate=fs, channels=1, dtype='float32')
+    sd.wait()
+    return audio.squeeze()
 
-# Audio stream capture and prediction function
-def predict_accent_from_audio(model):
-    p = pyaudio.PyAudio()
-    stream = p.open(format=pyaudio.paInt16, channels=1, rate=SAMPLING_RATE, input=True, frames_per_buffer=1024)
+# === Inference ===
+def transcribe(audio, processor, model, sample_rate=16000):
+    inputs = processor(audio, sampling_rate=sample_rate, return_tensors="pt", padding=True)
+    with torch.no_grad():
+        logits = model(inputs.input_values).logits
+    predicted_ids = torch.argmax(logits, dim=-1)
+    transcription = processor.batch_decode(predicted_ids)
+    return transcription[0]
 
-    st.write("Listening... Please speak into the microphone.")
-    
-    while True:
-        data = np.frombuffer(stream.read(1024), dtype=np.int16)
-        y = data.astype(np.float32)  # Convert audio data to float32
-
-        # Extract MFCC features
-        mfcc_features = extract_mfcc(y)
-        speaker_embedding = dummy_speaker_embedding(y)  # Use the real speaker model for actual use
-
-        # Prepare input for model: Combine MFCC and speaker embedding
-        input_data = np.concatenate([mfcc_features, speaker_embedding])
-
-        # Convert input data to torch tensor
-        input_tensor = torch.tensor(input_data, dtype=torch.float32).unsqueeze(0).unsqueeze(0)
-
-        # Predict accent using the model
-        with torch.no_grad():
-            prediction = model(input_tensor)
-            predicted_accent = ACCENT_CLASSES[torch.argmax(prediction).item()]
-
-        st.write(f"Predicted Accent: {predicted_accent}")
-        break
-
-# Streamlit UI
+# === Streamlit UI ===
 def main():
-    st.title("Accent-Aware Speech Recognition System")
+    st.title("🎙️ Live Speech-to-Text Transcription")
+    st.write("Click the button below to record your voice and get a text transcription using Wav2Vec2.")
 
-    st.markdown("""
-    This app uses a deep learning model to predict the accent of the speaker in real-time.
-    It listens to your speech, processes it, and predicts your accent.
-    """)
+    duration = st.slider("Select recording duration (seconds)", 1, 10, 3)
+    if st.button("🔴 Record"):
+        audio = record_audio(duration)
+        st.success("Recording complete. Transcribing...")
 
-    st.sidebar.title("Controls")
-    start_button = st.sidebar.button("Start Listening")
+        processor, model = load_model()
+        text = transcribe(audio, processor, model)
+        st.subheader("📝 Transcribed Text:")
+        st.write(text)
 
-    if start_button:
-        model = load_model()  # Load the model
-        st.write("Model loaded. Ready to listen for speech.")
-        predict_accent_from_audio(model)
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

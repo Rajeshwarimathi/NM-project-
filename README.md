@@ -1,22 +1,22 @@
-# 🎙️ Accent-Aware Speech Recognition System
+# 🎙️ Live Speech-to-Text Transcription App
 
-This project is a real-time accent-aware speech recognition system that uses PyTorch and Streamlit. It listens to live speech from the user's microphone and predicts the accent (e.g., English, French, German, Spanish) using a deep learning model.
+This project is an end-to-end speech recognition system with a simple user interface (UI) built using Streamlit. It records audio from your microphone, transcribes it using a pre-trained Wav2Vec2 model, and displays the transcribed text in real time.
 
----
+## 🚀 Features
 
-## 🔧 Features
+- 🎧 Live microphone recording (1–10 seconds)
+- 🤖 Transcription using Wav2Vec2 (Facebook/wav2vec2-large-960h)
+- 🖥️ Streamlit UI for user-friendly interaction
 
-- Real-time audio streaming using `pyaudio`
-- MFCC-based audio feature extraction using `librosa`
-- Deep learning model with LSTM for accent classification
-- Dummy speaker adaptation (can be replaced with real embeddings)
-- Simple and interactive Streamlit UI
+## 🛠️ Requirements
 
----
+- Python 3.8 or higher
+- Internet connection (to download the pre-trained model)
 
 ## 📦 Installation
 
-### 1. Clone the repository
+1. Clone the repository:
+
 ```bash
-git clone https://github.com/yourusername/accent-recognition
-cd accent-recognition
+git clone https://github.com/your-username/speech-to-text-ui.git
+cd speech-to-text-ui
