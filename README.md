@@ -1,22 +1,22 @@
-# 🎙️ Live Speech-to-Text Transcription App
+# 🎙️ Real-Time Speech-to-Text Customer Support Bot
 
-This project is an end-to-end speech recognition system with a simple user interface (UI) built using Streamlit. It records audio from your microphone, transcribes it using a pre-trained Wav2Vec2 model, and displays the transcribed text in real time.
+This is a Streamlit web app that captures microphone input, transcribes it in real-time using OpenAI's Whisper model, and provides automated responses. It's designed for customer support automation with a simple chatbot interface.
 
-## 🚀 Features
+---
 
-- 🎧 Live microphone recording (1–10 seconds)
-- 🤖 Transcription using Wav2Vec2 (Facebook/wav2vec2-large-960h)
-- 🖥️ Streamlit UI for user-friendly interaction
+## 🧩 Features
 
-## 🛠️ Requirements
+- 🎤 Live speech-to-text using WebRTC
+- 🧠 Basic AI bot for auto-responses
+- 📋 Live transcript chat window
+- ⚡ Built with Streamlit for rapid deployment
 
-- Python 3.8 or higher
-- Internet connection (to download the pre-trained model)
+---
 
-## 📦 Installation
+## 🚀 Setup Instructions
 
-1. Clone the repository:
+### 1. Clone the repository
 
 ```bash
-git clone https://github.com/your-username/speech-to-text-ui.git
-cd speech-to-text-ui
+git clone https://github.com/yourusername/realtime-speech-support.git
+cd realtime-speech-support

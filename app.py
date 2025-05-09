@@ -1,46 +1,79 @@
 import streamlit as st
-import torch
-import sounddevice as sd
+from streamlit_webrtc import webrtc_streamer, WebRtcMode
+import whisper
+import queue
+import av
 import numpy as np
-from transformers import Wav2Vec2Processor, Wav2Vec2ForCTC
 
-# === Load Pretrained Model ===
+st.set_page_config(page_title="Real-Time Customer Support", layout="centered")
+
+# Load Whisper model once
 @st.cache_resource
 def load_model():
-    processor = Wav2Vec2Processor.from_pretrained("facebook/wav2vec2-large-960h")
-    model = Wav2Vec2ForCTC.from_pretrained("facebook/wav2vec2-large-960h")
-    return processor, model
+    return whisper.load_model("base")
 
-# === Record Audio ===
-def record_audio(duration=3, fs=16000):
-    st.info(f"Recording for {duration} seconds...")
-    audio = sd.rec(int(duration * fs), samplerate=fs, channels=1, dtype='float32')
-    sd.wait()
-    return audio.squeeze()
+model = load_model()
 
-# === Inference ===
-def transcribe(audio, processor, model, sample_rate=16000):
-    inputs = processor(audio, sampling_rate=sample_rate, return_tensors="pt", padding=True)
-    with torch.no_grad():
-        logits = model(inputs.input_values).logits
-    predicted_ids = torch.argmax(logits, dim=-1)
-    transcription = processor.batch_decode(predicted_ids)
-    return transcription[0]
+# Set up session state to track conversation
+if "chat_log" not in st.session_state:
+    st.session_state.chat_log = []
 
-# === Streamlit UI ===
-def main():
-    st.title("🎙️ Live Speech-to-Text Transcription")
-    st.write("Click the button below to record your voice and get a text transcription using Wav2Vec2.")
+# Simple bot response logic
+def get_bot_response(text):
+    if "price" in text.lower():
+        return "Our pricing information is available on our website."
+    elif "support" in text.lower():
+        return "Support is available 24/7 through our chatbot or email."
+    elif "refund" in text.lower():
+        return "I can help with refunds. Could you provide your order number?"
+    return "Thank you! A human agent will follow up if needed."
 
-    duration = st.slider("Select recording duration (seconds)", 1, 10, 3)
-    if st.button("🔴 Record"):
-        audio = record_audio(duration)
-        st.success("Recording complete. Transcribing...")
+# Audio processing
+audio_queue = queue.Queue()
 
-        processor, model = load_model()
-        text = transcribe(audio, processor, model)
-        st.subheader("📝 Transcribed Text:")
-        st.write(text)
+def audio_frame_callback(frame: av.AudioFrame) -> av.AudioFrame:
+    audio = frame.to_ndarray().flatten().astype(np.float32) / 32768.0
+    audio_queue.put(audio)
+    return frame
 
-if __name__ == "__main__":
-    main()
+# Streamlit UI
+st.title("🎙️ Real-Time Speech-to-Text Customer Support")
+
+webrtc_ctx = webrtc_streamer(
+    key="speech-to-text",
+    mode=WebRtcMode.SENDONLY,
+    audio_frame_callback=audio_frame_callback,
+    media_stream_constraints={"video": False, "audio": True},
+)
+
+# Display conversation
+st.subheader("📝 Live Transcript")
+chat_area = st.empty()
+
+# Real-time transcription loop
+if webrtc_ctx.state.playing:
+    st.info("🎧 Listening... Speak into your microphone.")
+    buffer = []
+    while True:
+        try:
+            audio_chunk = audio_queue.get(timeout=2)
+            buffer.extend(audio_chunk)
+            if len(buffer) > 16000 * 5:  # 5 seconds buffer
+                audio_array = np.array(buffer)
+                result = model.transcribe(audio_array, fp16=False)
+                text = result["text"].strip()
+                if text:
+                    bot_reply = get_bot_response(text)
+                    st.session_state.chat_log.append(("User", text))
+                    st.session_state.chat_log.append(("Bot", bot_reply))
+                buffer = []
+        except queue.Empty:
+            break
+
+# Display chat log
+with chat_area.container():
+    for speaker, message in st.session_state.chat_log:
+        if speaker == "User":
+            st.markdown(f"🗣️ **You:** {message}")
+        else:
+            st.markdown(f"🤖 **Bot:** {message}")
